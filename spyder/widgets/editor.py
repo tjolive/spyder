@@ -1301,8 +1301,7 @@ class EditorStack(QWidget):
             index = self.get_stack_index()
 
         finfo = self.data[index]
-        if not (finfo.editor.document().isModified() or
-                finfo.newly_created) and not force:
+        if not finfo.editor.document().isModified() and not force:
             return True
         if not osp.isfile(finfo.filename) and not force:
             # File has not been saved yet
@@ -1663,7 +1662,7 @@ class EditorStack(QWidget):
             return
         finfo = self.data[index]
         if state is None:
-            state = finfo.editor.document().isModified() or finfo.newly_created
+            state = finfo.editor.document().isModified()
         self.set_stack_title(index, state)
         # Toggle save/save all actions state
         self.save_action.setEnabled(state)
