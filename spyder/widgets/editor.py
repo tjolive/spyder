@@ -381,7 +381,7 @@ class EditorStack(QWidget):
         self.linenumbers_enabled = True
         self.blanks_enabled = False
         self.edgeline_enabled = True
-        self.edgeline_column = 79
+        self.edgeline_columns = (79,)
         self.codecompletion_auto_enabled = True
         self.codecompletion_case_enabled = False
         self.codecompletion_enter_enabled = False
@@ -678,8 +678,7 @@ class EditorStack(QWidget):
 
     def set_outlineexplorer(self, outlineexplorer):
         self.outlineexplorer = outlineexplorer
-        self.outlineexplorer.outlineexplorer_is_visible.connect(
-                                                 self._refresh_outlineexplorer)
+        self.outlineexplorer.is_visible.connect(self._refresh_outlineexplorer)
 
     def initialize_outlineexplorer(self):
         """This method is called separately from 'set_oulineexplorer' to avoid
@@ -703,7 +702,7 @@ class EditorStack(QWidget):
         self.title = text
 
     def __update_editor_margins(self, editor):
-        editor.setup_margins(linenumbers=self.linenumbers_enabled,
+        editor.linenumberarea.setup_margins(linenumbers=self.linenumbers_enabled,
                              markers=self.has_markers())
 
     def __codeanalysis_settings_changed(self, current_finfo):
@@ -767,14 +766,14 @@ class EditorStack(QWidget):
         self.edgeline_enabled = state
         if self.data:
             for finfo in self.data:
-                finfo.editor.set_edge_line_enabled(state)
+                finfo.editor.edge_line.set_enabled(state)
 
-    def set_edgeline_column(self, column):
+    def set_edgeline_columns(self, columns):
         # CONF.get(self.CONF_SECTION, 'edge_line_column')
-        self.edgeline_column = column
+        self.edgeline_columns = columns
         if self.data:
             for finfo in self.data:
-                finfo.editor.set_edge_line_column(column)
+                finfo.editor.edge_line.set_columns(columns)
 
     def set_codecompletion_auto_enabled(self, state):
         # CONF.get(self.CONF_SECTION, 'codecompletion_auto')
@@ -1132,13 +1131,15 @@ class EditorStack(QWidget):
             if fixpath(filename) == fixpath(finfo.filename):
                 return index
 
-    def set_current_filename(self, filename):
-        """Set current filename and return the associated editor instance"""
+    def set_current_filename(self, filename, focus=True):
+        """Set current filename and return the associated editor instance."""
         index = self.has_filename(filename)
         if index is not None:
-            self.set_stack_index(index)
+            if focus:
+                self.set_stack_index(index)
             editor = self.data[index].editor
-            editor.setFocus()
+            if focus:
+                editor.setFocus()
             return editor
 
     def is_file_opened(self, filename=None):
@@ -1747,7 +1748,7 @@ class EditorStack(QWidget):
                 linenumbers=self.linenumbers_enabled,
                 show_blanks=self.blanks_enabled,
                 edge_line=self.edgeline_enabled,
-                edge_line_column=self.edgeline_column, language=language,
+                edge_line_columns=self.edgeline_columns, language=language,
                 markers=self.has_markers(), font=self.default_font,
                 color_scheme=self.color_scheme,
                 wrap=self.wrap_enabled, tab_mode=self.tabmode_enabled,
@@ -2086,8 +2087,8 @@ class EditorSplitter(QSplitter):
         return dict(hexstate=qbytearray_to_str(self.saveState()),
                     sizes=self.sizes(), splitsettings=splitsettings)
 
-    def set_layout_settings(self, settings):
-        """Restore layout state"""
+    def set_layout_settings(self, settings, dont_goto=None):
+        """Restore layout state."""
         splitsettings = settings.get('splitsettings')
         if splitsettings is None:
             return
@@ -2100,12 +2101,17 @@ class EditorSplitter(QSplitter):
             editorstack = splitter.widget(0)
             for index, finfo in enumerate(editorstack.data):
                 editor = finfo.editor
-                # FIXME: Temporal fix
-                try:
-                    editor.go_to_line(clines[index])
-                except IndexError:
+                # TODO: go_to_line is not working properly (the line it jumps
+                # to is not the corresponding to that file). This will be fixed
+                # in a future PR (which will fix issue #3857)
+                if dont_goto is not None:
+                    # skip go to line for first file because is already there
                     pass
-            editorstack.set_current_filename(cfname)
+                else:
+                    try:
+                        editor.go_to_line(clines[index])
+                    except IndexError:
+                        pass
         hexstate = settings.get('hexstate')
         if hexstate is not None:
             self.restoreState( QByteArray().fromHex(
